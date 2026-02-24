@@ -1,3 +1,8 @@
+MLO Changes December 2025 - February 2026
+
+- [] Added anisotropic Langevin thermostat `langevinMLO` where $\gamma_{xy} \neq \gamma_z$
+- [] Added modified AH potential `lj/cut/mlo` where $\lambda = \lambda(z)$ and the LJ part only depends on the distance in the $xy$-plane.
+
 This is the LAMMPS software package.
 
 LAMMPS stands for Large-scale Atomic/Molecular Massively Parallel
