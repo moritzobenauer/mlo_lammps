@@ -104,6 +104,11 @@ void MLOPairLJCut::compute(int eflag, int vflag)
     jlist = firstneigh[i];
     jnum = numneigh[i];
 
+    // Check if the current atom is active or inactive and calculate Theta(z)
+
+    double sigmoid_arg = 100.0 * ztmp;    // Steepness of the sigmoid function
+    double theta_i = 1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=0
+
     for (jj = 0; jj < jnum; jj++) {
       j = jlist[jj];
       factor_lj = special_lj[sbmask(j)];
@@ -127,8 +132,11 @@ void MLOPairLJCut::compute(int eflag, int vflag)
       // Calculate l based on the z position
 
         double sigmoid_arg = 100.0 * ztmp;    // Steepness of the sigmoid function
-        double force_correction =
+        double theta_j =
             1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=0
+
+        // The force correction is Lambda = Theta(z_i) * Theta(z_j)
+        double force_correction = theta_i * theta_j;
         
         // Debugging setting lambda = 1.0
         // force_correction = 1.0;
