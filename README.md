@@ -1,12 +1,18 @@
 ## MLO Changes 
-### December 2025 - February 2026
 
-- Added anisotropic Langevin thermostat `langevinMLO` where $\gamma_{xy} \neq \gamma_z$
-- Added modified AH potential `lj/cut/mlo` where $\lambda = \lambda(z)$ and the LJ part only depends on the distance in the $xy$-plane.
+### Added
+- (2026/04) added `fix free_energy` for the constant potential
+- (2026/01) Added anisotropic Langevin thermostat `langevinMLO` where $\gamma_{xy} \neq \gamma_z$
+- (2026/01) Added modified AH potential `lj/cut/mlo` where $\lambda = \lambda(z)$ and the LJ part only depends on the distance in the $xy$-plane.
 
 ## Bugfixes
 
-- $\lambda_{ij}$ is now correctly calculated as $\lambda_{ij} = \Theta_i \Theta_j$
+- (2026/04) $\lambda_{ij}$ is now correctly calculated as $\lambda_{ij} = \Theta_i \Theta_j$
+- (2026/04) self-interactions
+
+## Changes
+
+
 
 ----------------------------------------------------------------------
 ----------------------------------------------------------------------
