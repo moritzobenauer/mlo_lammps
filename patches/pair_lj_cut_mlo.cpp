@@ -106,7 +106,10 @@ void MLOPairLJCut::compute(int eflag, int vflag)
 
     // Check if the current atom is active or inactive and calculate Theta(z)
 
-    double sigmoid_arg = 100.0 * ztmp;    // Steepness of the sigmoid function
+
+    double sigmoid_alpha = 100.0;
+
+    double sigmoid_arg = sigmoid_alpha * ztmp;    // Steepness of the sigmoid function
     double theta_i = 1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=0
 
     for (jj = 0; jj < jnum; jj++) {
@@ -125,13 +128,17 @@ void MLOPairLJCut::compute(int eflag, int vflag)
 
       jtype = type[j];
 
+      double force_z = 0.0;
 
-      if (rsq < cutsq[itype][jtype]) {
+
+      // if (rsq < cutsq[itype][jtype]) {
+      if (rsq_2d < cutsq[itype][jtype]) {
+
 
 
       // Calculate l based on the z position
 
-        double sigmoid_arg = 100.0 * ztmp;    // Steepness of the sigmoid function
+        double sigmoid_arg = sigmoid_alpha * ztmp;    // Steepness of the sigmoid function
         double theta_j =
             1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=0
 
@@ -139,7 +146,7 @@ void MLOPairLJCut::compute(int eflag, int vflag)
         double force_correction = theta_i * theta_j;
         
         // Debugging setting lambda = 1.0
-        // force_correction = 1.0;
+        // force_correction = 0.0;
         // 
 
         // Calculating r^-1 and r^-6 for the 2D distances
@@ -147,29 +154,45 @@ void MLOPairLJCut::compute(int eflag, int vflag)
         double r6inv_2d = r2inv_2d * r2inv_2d * r2inv_2d;
 
 
+        // calculate the derivative for the potential in z \theta_i * d/dz \theta_j
+
+        double force_derivative_factor_z = theta_i * (sigmoid_alpha * exp(-sigmoid_arg) / pow(1.0 + exp(-sigmoid_arg), 2));
+
+
+
         if (rsq_2d <= LJ_MINIMUM[itype][jtype]) {
           // AH force: return d/dr LJ
           forcelj = r6inv_2d * (lj1[itype][jtype] * r6inv_2d - lj2[itype][jtype]);
+
+          force_z = epsilon[itype][jtype] * theta_i * force_derivative_factor_z;
+
         }
 
         else {
           // AH force: return l * d/dr LJ
           forcelj =
               r6inv_2d * (lj1[itype][jtype] * r6inv_2d - lj2[itype][jtype]) * force_correction;
+
+          force_z = -((lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) -
+                offset[itype][jtype]) * theta_i * force_derivative_factor_z;
         }
+
+        // printf("particle position: %f, force_z: %f, derivative: %f\n", x[i][2], force_z, force_derivative_factor_z);
 
 
         // Converting units and converting potential to force
         fpair = factor_lj * forcelj * r2inv_2d;
 
+        double fpair_z = factor_lj * force_z;
+
         // Don't apply any forces in the z direction
         f[i][0] += delx * fpair;
         f[i][1] += dely * fpair;
-        // f[i][2] += delz * fpair;
+        f[i][2] += fpair_z;
         if (newton_pair || j < nlocal) {
           f[j][0] -= delx * fpair;
           f[j][1] -= dely * fpair;
-          // f[j][2] -= delz * fpair;
+          f[j][2] -= fpair_z;
         }
 
         if (eflag) {
