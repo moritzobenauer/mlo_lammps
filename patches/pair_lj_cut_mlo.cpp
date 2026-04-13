@@ -105,12 +105,13 @@ void MLOPairLJCut::compute(int eflag, int vflag)
     jnum = numneigh[i];
 
     // Check if the current atom is active or inactive and calculate Theta(z)
-
+    // Theta(z) has to be a functional of the free energy landscape unfornately, because the maximum changes slightly based on the parameters for the potential
 
     double sigmoid_alpha = 100.0;
+    // double z_star = 0.0;    
 
-    double sigmoid_arg = sigmoid_alpha * ztmp;    // Steepness of the sigmoid function
-    double theta_i = 1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=0
+    double sigmoid_arg = sigmoid_alpha * (ztmp - z_star);    // Steepness of the sigmoid function
+    double theta_i = 1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=z*
 
     for (jj = 0; jj < jnum; jj++) {
       j = jlist[jj];
@@ -131,16 +132,16 @@ void MLOPairLJCut::compute(int eflag, int vflag)
       double force_z = 0.0;
 
 
-      // if (rsq < cutsq[itype][jtype]) {
-      if (rsq_2d < cutsq[itype][jtype]) {
+      if (rsq < cutsq[itype][jtype]) {
+      // if (rsq_2d < cutsq[itype][jtype]) {
 
 
 
       // Calculate l based on the z position
 
-        double sigmoid_arg = sigmoid_alpha * ztmp;    // Steepness of the sigmoid function
+        double sigmoid_arg = sigmoid_alpha * (ztmp - z_star);    // Steepness of the sigmoid function
         double theta_j =
-            1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=0
+            1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=z*
 
         // The force correction is Lambda = Theta(z_i) * Theta(z_j)
         double force_correction = theta_i * theta_j;
@@ -256,9 +257,10 @@ void MLOPairLJCut::allocate()
 
 void MLOPairLJCut::settings(int narg, char **arg)
 {
-  if (narg != 1) error->all(FLERR, "Illegal pair_style command");
+  if (narg != 2) error->all(FLERR, "Illegal pair_style command");
 
   cut_global = utils::numeric(FLERR, arg[0], false, lmp);
+  z_star = utils::numeric(FLERR, arg[1], false, lmp);
 
   // reset cutoffs that have been explicitly set
 

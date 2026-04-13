@@ -52,6 +52,7 @@ class MLOPairLJCut : public Pair {
 
  protected:
   double cut_global;
+  double z_star;    // z position of the free energy barrier, where Theta(z) transitions from 0 to 1
   double **cut;
   double **epsilon, **sigma;
   double **lj1, **lj2, **lj3, **lj4, **offset, **LJ_MINIMUM;
