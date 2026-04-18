@@ -104,14 +104,21 @@ void MLOPairLJCut::compute(int eflag, int vflag)
     jlist = firstneigh[i];
     jnum = numneigh[i];
 
+    double debug_energy_counter_lj = 0.0;
+    double debug_energy_counter_mlo = 0.0;
+    double debug_force_counter_mlo = 0.0;
+
     // Check if the current atom is active or inactive and calculate Theta(z)
     // Theta(z) has to be a functional of the free energy landscape unfornately, because the maximum changes slightly based on the parameters for the potential
 
-    double sigmoid_alpha = 100.0;
-    // double z_star = 0.0;    
+    double sigmoid_alpha = 50.0;
+    // double z_star = 0.0;
 
-    double sigmoid_arg = sigmoid_alpha * (ztmp - z_star);    // Steepness of the sigmoid function
-    double theta_i = 1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=z*
+    double sigmoid_arg = sigmoid_alpha * (x[i][2] - z_star);    // Steepness of the sigmoid function
+    sigmoid_arg = std::max(-60.0, std::min(60.0, sigmoid_arg)); 
+    double theta_i =
+        1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=z*
+
 
     for (jj = 0; jj < jnum; jj++) {
       j = jlist[jj];
@@ -120,48 +127,243 @@ void MLOPairLJCut::compute(int eflag, int vflag)
 
       delx = xtmp - x[j][0];
       dely = ytmp - x[j][1];
-      delz = ztmp - x[j][2];
+      // delz = ztmp - x[j][2];
+
+      delz = 0.0;
+
+
+      // delz = 0.0;
+
       rsq = delx * delx + dely * dely + delz * delz;
 
       // printf("Atom %d interacting with Atom %d: delx=%.3f, dely=%.3f, delz=%.3f, rsq=%.3f\n", i, j, delx, dely, delz, rsq);
 
       rsq_2d = delx * delx + dely * dely;    // Only consider xy components for cutoff
 
+
+      double r2inv_2d = 1.0 / rsq_2d;
+      double r6inv_2d = r2inv_2d * r2inv_2d * r2inv_2d;
+
       jtype = type[j];
+
+
+// -------------------------------------------------------------------------------------
+//                    FOR DEBUGGING: PURE LJ/CUT CODE HERE
+
+      bool pure_lj_interactions = 0;
+      bool output_mlo_interactions  = 0;
+      bool apply_mlo_interactions = 1;
+      bool debugging_output = 0;
+
+      if (pure_lj_interactions == 1){
+
+        double rsw = 0.0;
+        double cut_in_off_sq = 0.0;
+        double cut_in_on_sq = 100.0;
+        double cut_in_off = 0.0;
+        double cut_in_on = 10.0;
+        double cut_in_diff = cut_in_on - cut_in_off;
+
+
+        double lj_forces[3] = {0.0, 0.0, 0.0};
+
+        if (rsq < cutsq[itype][jtype]) {
+        if (rsq > cut_in_off_sq) {
+          r2inv = 1.0 / rsq;
+          r6inv = r2inv * r2inv * r2inv;
+          forcelj = r6inv * (lj1[itype][jtype] * r6inv - lj2[itype][jtype]);
+          fpair = factor_lj * forcelj * r2inv;
+        
+          
+          // lj_forces[0] = delx * fpair;
+          // lj_forces[1] = dely * fpair;
+          // lj_forces[2] = delz * fpair;
+
+
+          f[i][0] += delx * fpair;
+          f[i][1] += dely * fpair;
+          f[i][2] += delz * fpair;
+
+          if (newton_pair || j < nlocal) {
+            f[j][0] -= delx * fpair;
+            f[j][1] -= dely * fpair;
+            f[j][2] -= delz * fpair;
+          }
+
+          if (eflag) {
+          r2inv = 1.0 / rsq;
+          r6inv = r2inv * r2inv * r2inv;
+          evdwl = r6inv * (lj3[itype][jtype] * r6inv - lj4[itype][jtype]) - offset[itype][jtype];
+          evdwl *= factor_lj;
+
+          if (debugging_output == 1 and i == 1){
+
+            printf("lj: lj3: %f, lj4: %f, r6inv: %f, evdwl: %f \n", lj3[itype][jtype], lj4[itype][jtype], r6inv, evdwl);
+            printf("                  Interaction with particle j=%i \n", j);
+
+            printf("     lj3*r6 - lj4  = %f\n", (lj3[itype][jtype] * r6inv - lj4[itype][jtype]));
+            printf("     r6inv = %.10e \n", r6inv);
+            printf("     The forces are: x=%f, y=%f, z=%f\n",  delx * fpair, dely * fpair, delz * fpair);
+
+            debug_energy_counter_lj += evdwl;
+
+
+          }
+
+        }
+
+        if (evflag) ev_tally(i, j, nlocal, newton_pair, evdwl, 0.0, fpair, delx, dely, delz);
+          // printf("ljcut: j=%i \n", j);
+
+        //   if (i == 1 or j ==1){
+        //   printf("Iteration starts \n ------------- \n");
+        //   printf("The original LJ potential calculated the forces between atom %i (%f,%f,%f) and %i (%f,%f,%f) \n", i, x[i][0], x[i][1], x[i][2], j, x[j][0], x[j][1], x[j][2]);
+        //   printf("      The 3D distance = %f \n", sqrt(rsq));
+        //   printf("      r6inv = %f\n", r6inv);
+        //   printf("      forclj = %f\n", forcelj);
+        //   printf("      r2inv = %f\n", r2inv);
+        //               printf("      factor_lj = %f\n", factor_lj);
+
+        //   printf("      fpair = %f\n", fpair);
+        //   printf(     "Forces in x=%f, y=%f, z=%f\n",  lj_forces[0],  lj_forces[1],  lj_forces[2]);
+        // }
+        
+      }}}
+    // -------------------------------------------------------------------------------------
+
+   
 
       double force_z = 0.0;
 
+      // z_max = 4.0
+      // double cutoff_2d = cutsq[itype][jtype] - 16.0;
+      // printf("cutoff_2d: %f\n", cutoff_2d);
 
+      double cutoff_2d_squared = cutoff_2d * cutoff_2d;
+
+      // if (rsq_2d < cutoff_2d_squared) {
       if (rsq < cutsq[itype][jtype]) {
-      // if (rsq_2d < cutsq[itype][jtype]) {
 
+        // Calculate l based on the z position
 
+        double sigmoid_arg_j =
+            sigmoid_alpha * (x[j][2] - z_star);    // Steepness of the sigmoid function
 
-      // Calculate l based on the z position
-
-        double sigmoid_arg = sigmoid_alpha * (ztmp - z_star);    // Steepness of the sigmoid function
+        sigmoid_arg_j = std::max(-60.0, std::min(60.0, sigmoid_arg_j));
         double theta_j =
-            1.0 / (1.0 + exp(-sigmoid_arg));    // Smoothly transitions from 0 to 1 around z=z*
+            1.0 / (1.0 + exp(-sigmoid_arg_j));    // Smoothly transitions from 0 to 1 around z=z*
 
         // The force correction is Lambda = Theta(z_i) * Theta(z_j)
         double force_correction = theta_i * theta_j;
-        
+
         // Debugging setting lambda = 1.0
         // force_correction = 0.0;
-        // 
+        //
 
         // Calculating r^-1 and r^-6 for the 2D distances
-        double r2inv_2d = 1.0 / rsq_2d;
-        double r6inv_2d = r2inv_2d * r2inv_2d * r2inv_2d;
 
 
         // calculate the derivative for the potential in z \theta_i * d/dz \theta_j
-
-        double force_derivative_factor_z = theta_i * (sigmoid_alpha * exp(-sigmoid_arg) / pow(1.0 + exp(-sigmoid_arg), 2));
-
-
+        
+        double force_derivative_factor_z =
+            sigmoid_alpha * exp(-sigmoid_arg) / pow(1.0 + exp(-sigmoid_arg), 2);
 
         if (rsq_2d <= LJ_MINIMUM[itype][jtype]) {
+          // AH force: return d/dr LJ
+          forcelj = r6inv_2d * (lj1[itype][jtype] * r6inv_2d - lj2[itype][jtype]);
+
+          force_z = epsilon[itype][jtype] * theta_j * force_derivative_factor_z;
+
+        }
+
+        else {
+          // AH force: return l * d/dr LJ
+          forcelj =
+              r6inv_2d * (lj1[itype][jtype] * r6inv_2d - lj2[itype][jtype]) * force_correction;
+
+          force_z = -((lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) * r6inv_2d - offset[itype][jtype]) *
+              theta_j * force_derivative_factor_z;
+        }
+
+        if (force_z < 0.0){
+        printf("force in z = %.17e \n", force_z);}
+
+        // Converting units and converting potential to force
+        fpair = factor_lj * forcelj * r2inv_2d;
+
+        double fpair_z = factor_lj * force_z;
+
+        if (apply_mlo_interactions  == 1){
+
+        f[i][0] += delx * fpair;
+        f[i][1] += dely * fpair;
+        f[i][2] += fpair_z;
+
+        debug_force_counter_mlo += fpair_z;
+
+
+        if (newton_pair || j < nlocal) {
+          f[j][0] -= delx * fpair;
+          f[j][1] -= dely * fpair;
+          f[j][2] -= fpair_z;
+        }
+
+
+
+        if (eflag) {
+
+          // if (x[i][2] < 0) {
+          //   printf("iteration cycle i,j = %i, %i\n", i, j);
+          //   printf("force correction for atoms i and j with dz: %f, %f, %f, %f\n", force_correction, x[i][2], x[j][2], x[j][2] - x[i][2]);
+          // }
+
+          
+
+          if (rsq_2d <= LJ_MINIMUM[itype][jtype]) {
+            // AH: return LJ + (1-l) * epsilon
+            evdwl = r6inv_2d * (lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) +
+                (1.0 - force_correction) * epsilon[itype][jtype];
+          } else {
+            // AH: return l * LJ
+            evdwl = force_correction * r6inv_2d * (lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) -
+                offset[itype][jtype];
+
+          }
+
+          // if (x[i][2] < 0) {
+          //   printf("vdw  for atoms i and j with dz and dxy: %f, %f, %f, %f\n", evdwl*factor_lj, x[i][2], x[j][2], sqrt(rsq_2d));
+          // }
+          // printf("evd raw %f with factor_lj=%f \n", evdwl, factor_lj);
+          evdwl *= factor_lj;
+          // evdwl *= 0.0;    // Debugging setting, set energy to 0.0
+          
+        //    if (i == 2048 or j == 2048){
+        //   printf("Energy contributions from the trial atom at z=%f with other atom at z=%f, e=%f \n", x[i][2], x[j][2], evdwl);
+        //   printf("     2d distance %f \n   ", sqrt(rsq_2d));
+        //   printf("     2d distance squared %f \n ", rsq_2d);
+        //   printf("     force correction %f and offset %f\n   ", force_correction, offset[itype][jtype]);
+
+        // }
+
+        if (evdwl < -epsilon[itype][jtype]) {
+          printf("Energy Warning! Energy contribution from pair %d-%d is %f, which is more negative than the depth of the potential well %f.\n", itype, jtype, evdwl, -epsilon[itype][jtype]);
+
+        }
+
+        }
+
+       
+
+        if (evflag) ev_tally(i, j, nlocal, newton_pair, evdwl, 0.0, fpair, delx, dely, delz);
+      }
+
+
+      if (output_mlo_interactions == 1 and i == 1){
+
+        if (eflag) {
+
+
+          if (rsq_2d <= LJ_MINIMUM[itype][jtype]) {
           // AH force: return d/dr LJ
           forcelj = r6inv_2d * (lj1[itype][jtype] * r6inv_2d - lj2[itype][jtype]);
 
@@ -174,49 +376,59 @@ void MLOPairLJCut::compute(int eflag, int vflag)
           forcelj =
               r6inv_2d * (lj1[itype][jtype] * r6inv_2d - lj2[itype][jtype]) * force_correction;
 
-          force_z = -((lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) -
-                offset[itype][jtype]) * theta_i * force_derivative_factor_z;
+          force_z = -((lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) * r6inv_2d - offset[itype][jtype]) *
+              theta_i * force_derivative_factor_z;
         }
 
-        // printf("particle position: %f, force_z: %f, derivative: %f\n", x[i][2], force_z, force_derivative_factor_z);
 
-
-        // Converting units and converting potential to force
-        fpair = factor_lj * forcelj * r2inv_2d;
-
-        double fpair_z = factor_lj * force_z;
-
-        // Don't apply any forces in the z direction
-        f[i][0] += delx * fpair;
-        f[i][1] += dely * fpair;
-        f[i][2] += fpair_z;
-        if (newton_pair || j < nlocal) {
-          f[j][0] -= delx * fpair;
-          f[j][1] -= dely * fpair;
-          f[j][2] -= fpair_z;
-        }
-
-        if (eflag) {
-         
+      
+          
 
           if (rsq_2d <= LJ_MINIMUM[itype][jtype]) {
             // AH: return LJ + (1-l) * epsilon
             evdwl = r6inv_2d * (lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) +
                 (1.0 - force_correction) * epsilon[itype][jtype];
-          }
-          else {
+          } else {
             // AH: return l * LJ
-            evdwl = force_correction * (lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) -
+            evdwl = force_correction * r6inv_2d * (lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) -
                 offset[itype][jtype];
+
           }
 
-          evdwl *= factor_lj;
-        }
+          if (debugging_output == 1 and i == 1){
+           printf("mlo: lj3: %f, lj4: %f, r6inv: %f, evdwl: %f \n", lj3[itype][jtype], lj4[itype][jtype], r6inv, evdwl);
+            printf("                  Interaction with particle j=%i \n", j);
 
-        if (evflag) ev_tally(i, j, nlocal, newton_pair, evdwl, 0.0, fpair, delx, dely, delz);
+           printf("The ah cutoff is at r = %f \n", sqrt(LJ_MINIMUM[itype][jtype]));
+           printf("distance between the two in 2D and 3D: %f %f \n", sqrt(rsq_2d), sqrt(rsq));
+           printf("The forces are: x=%f, y=%f, z=%f\n",  delx * fpair, dely * fpair, fpair_z);
+          }
+          //  printf("     lj3*r6 - lj4  = %f\n", (lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]));
+          //  printf("     r6inv = %.10e \n", r6inv_2d);
+
+          
+
+           debug_energy_counter_mlo += evdwl;
+
       }
+
+
+    }
     }
   }
+
+ 
+  // printf("energy lj %f \n", debug_energy_counter_lj);
+  // printf("energy mlo %f \n", debug_energy_counter_mlo);
+
+
+if (debug_force_counter_mlo < 0){
+
+  printf("alarm: force for particle i=%i along z: %.17f \n", i, debug_force_counter_mlo);
+
+}
+
+}
 
   if (vflag_fdotr) virial_fdotr_compute();
 };
@@ -257,10 +469,11 @@ void MLOPairLJCut::allocate()
 
 void MLOPairLJCut::settings(int narg, char **arg)
 {
-  if (narg != 2) error->all(FLERR, "Illegal pair_style command");
+  if (narg != 3) error->all(FLERR, "Illegal pair_style command");
 
   cut_global = utils::numeric(FLERR, arg[0], false, lmp);
   z_star = utils::numeric(FLERR, arg[1], false, lmp);
+  cutoff_2d = utils::numeric(FLERR, arg[2], false, lmp);
 
   // reset cutoffs that have been explicitly set
 
@@ -327,8 +540,9 @@ double MLOPairLJCut::init_one(int i, int j)
   lj3[i][j] = 4.0 * epsilon[i][j] * pow(sigma[i][j], 12.0);
   lj4[i][j] = 4.0 * epsilon[i][j] * pow(sigma[i][j], 6.0);
 
-  double CUBE_ROOT_TWO = pow(2.0, 1.0/3.0);
-  LJ_MINIMUM[i][j] = CUBE_ROOT_TWO * sigma[i][j] *sigma[i][j];    // Square Minimum of the LJ potential in 2D
+  double CUBE_ROOT_TWO = pow(2.0, 1.0 / 3.0);
+  LJ_MINIMUM[i][j] =
+      CUBE_ROOT_TWO * sigma[i][j] * sigma[i][j];    // Square Minimum of the LJ potential in 2D
 
   if (offset_flag && (cut[i][j] > 0.0)) {
     double ratio = sigma[i][j] / cut[i][j];
@@ -473,20 +687,60 @@ void MLOPairLJCut::write_data_all(FILE *fp)
 
 /* ---------------------------------------------------------------------- */
 
-// double MLOPairLJCut::single(int /*i*/, int /*j*/, int itype, int jtype, double rsq,
-//                             double /*factor_coul*/, double factor_lj, double &fforce)
-// {
-//   double r2inv, r6inv, forcelj, philj;
+double MLOPairLJCut::single(int i, int j, int itype, int jtype, double rsq, double /*factor_coul*/,
+                            double factor_lj, double &fforce)
+{
 
-//   r2inv = 1.0 / rsq;
-//   r6inv = r2inv * r2inv * r2inv;
-//   forcelj = r6inv * (lj1[itype][jtype] * r6inv - lj2[itype][jtype]);
-//   fforce = factor_lj * forcelj * r2inv;
+  // double **x = atom->x;
+  // double xi = x[i][0];
+  // double yi = x[i][1];
+  // double zi = x[i][2];
 
-//   philj = r6inv * (lj3[itype][jtype] * r6inv - lj4[itype][jtype]) - offset[itype][jtype];
-//   return factor_lj * philj;
-// }
+  // double delx = xi - x[j][0];
+  // double dely = yi - x[j][1];
+  // double delz = zi - x[j][2];
 
+  // double zj = x[j][2];
+
+  // double rsq_2d = delx * delx + dely * dely;    // Only consider xy components for cutoff
+
+  // double energy = 0.0;
+  // double philj = 0.0;
+
+  // double r2inv_2d = 1.0 / rsq_2d;
+  // double r6inv_2d = r2inv_2d * r2inv_2d * r2inv_2d;
+
+  // double sigmoid_alpha = 100.0;
+  // double sigmoid_arg_i = sigmoid_alpha * (zi - z_star);    
+  // double theta_i =
+  //       1.0 / (1.0 + exp(-sigmoid_arg_i));
+
+  // double sigmoid_arg_j = sigmoid_alpha * (zj - z_star);    
+  // double theta_j =
+  //       1.0 / (1.0 + exp(-sigmoid_arg_j));
+
+
+  // double force_correction = theta_i * theta_j;
+
+
+  // if (rsq_2d <= LJ_MINIMUM[itype][jtype]) {
+  //           // AH: return LJ + (1-l) * epsilon
+  //           philj = r6inv_2d * (lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) +
+  //               (1.0 - force_correction) * epsilon[itype][jtype];
+  //         } else {
+  //           // AH: return l * LJ
+  //           philj = force_correction * (lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) -
+  //               offset[itype][jtype];
+  //         }
+
+  //         energy += factor_lj * philj;
+
+
+
+  // return energy;
+
+  return 10.0;
+}
 /* ---------------------------------------------------------------------- */
 
 void MLOPairLJCut::born_matrix(int /*i*/, int /*j*/, int itype, int jtype, double rsq,

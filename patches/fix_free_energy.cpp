@@ -5,13 +5,16 @@
 #include "error.h"
 #include "utils.h"
 #include <cmath>
+#include <cstring>
 
 using namespace LAMMPS_NS;
 
 FixFreeEnergy::FixFreeEnergy(LAMMPS *_lmp, int narg, char **arg) : Fix(_lmp, narg, arg)
 {
-  // Expected syntax: fix ID group free_energy a b f
-  if (narg != 6) error->all(FLERR, "Illegal fix free_energy command. Expected: fix ID group free_energy a b f");
+  // Expected syntax: fix ID group free_energy a b f [disable_reactions]
+  if (narg < 6 || narg > 7)
+    error->all(FLERR,
+               "Illegal fix free_energy command. Expected: fix ID group free_energy a b f [disable_reactions]");
 
   scalar_flag = 1;
   extscalar = 1;
@@ -22,6 +25,19 @@ FixFreeEnergy::FixFreeEnergy(LAMMPS *_lmp, int narg, char **arg) : Fix(_lmp, nar
   coeff_a = utils::numeric(FLERR, arg[3], false, lmp); // z^4 coeff
   coeff_b = utils::numeric(FLERR, arg[4], false, lmp); // z^2 coeff
   coeff_f = utils::numeric(FLERR, arg[5], false, lmp); // z coeff
+
+  disable_reactions = 0;
+  if (narg == 7) {
+    if (strcmp(arg[6], "disable_reactions") == 0) {
+      disable_reactions = 1;
+    } else {
+      error->all(FLERR,
+                 "Illegal fix free_energy optional argument. Supported optional keyword: disable_reactions");
+    }
+  }
+  
+  e_total_all = 0.0;
+  eflag = 0;
 }
 
 FixFreeEnergy::~FixFreeEnergy() {}
@@ -47,6 +63,7 @@ void FixFreeEnergy::post_force(int /*vflag*/)
 {
   double **x = atom->x;
   double **f = atom->f;
+  double **v = atom->v;
   int *mask = atom->mask;
   int nlocal = atom->nlocal;
 
@@ -64,8 +81,17 @@ void FixFreeEnergy::post_force(int /*vflag*/)
 
       // Energy V = a*z^4 - b*z^2 + f*z
       e_total += coeff_a * pow(z, 4) - coeff_b * pow(z, 2) + coeff_f * z;
+
+      if (disable_reactions) {
+        v[i][2] = 0.0;
+        f[i][2] = 0.0;
+      }
     }
   }
+
+
+
+
 }
 
 void FixFreeEnergy::post_force_respa(int vflag, int ilevel, int /*iloop*/)
@@ -79,5 +105,6 @@ double FixFreeEnergy::compute_scalar()
     MPI_Allreduce(&e_total, &e_total_all, 1, MPI_DOUBLE, MPI_SUM, world);
     eflag = 1;
   }
+  eflag = 0;
   return e_total_all;
 }

@@ -24,6 +24,7 @@ class FixFreeEnergy : public Fix {
 
  protected:
   double coeff_a, coeff_b, coeff_f; // coefficients for z^4, z^2, z
+  int disable_reactions;
   int ilevel_respa;
   int eflag;
   double e_total, e_total_all;

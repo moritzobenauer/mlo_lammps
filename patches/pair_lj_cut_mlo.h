@@ -42,7 +42,7 @@ class MLOPairLJCut : public Pair {
   void read_restart_settings(FILE *) override;
   void write_data(FILE *) override;
   void write_data_all(FILE *) override;
-  // double single(int, int, int, int, double, double, double, double &) override;
+  double single(int, int, int, int, double, double, double, double &) override;
   void born_matrix(int, int, int, int, double, double, double, double &, double &) override;
   void *extract(const char *, int &) override;
 
@@ -53,6 +53,7 @@ class MLOPairLJCut : public Pair {
  protected:
   double cut_global;
   double z_star;    // z position of the free energy barrier, where Theta(z) transitions from 0 to 1
+  double cutoff_2d; // cutoff for the 2D distance in the xy plane
   double **cut;
   double **epsilon, **sigma;
   double **lj1, **lj2, **lj3, **lj4, **offset, **LJ_MINIMUM;

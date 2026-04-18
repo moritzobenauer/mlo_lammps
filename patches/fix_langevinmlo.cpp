@@ -431,6 +431,10 @@ void FixLangevinMLO::post_force_templated()
       f[i][1] += fdrag[1] + fran[1];
       f[i][2] += fdrag[2] + fran[2];
 
+
+      // printf("drag along z = %f \n", fdrag[2]);
+      // printf("kick along z = %f \n", fran[2]);
+
       if (Tp_ZERO) {
         fsum[0] += fran[0];
         fsum[1] += fran[1];
@@ -443,7 +447,10 @@ void FixLangevinMLO::post_force_templated()
         flangevin[i][2] = fdrag[2] + fran[2];
       }
     }
+    
   }
+
+  
 
   // set total force to zero
 
