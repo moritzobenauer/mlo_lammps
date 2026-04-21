@@ -233,7 +233,8 @@ void MLOPairLJCut::compute(int eflag, int vflag)
 
    
 
-      double force_z = 0.0;
+      double force_z_i = 0.0;
+      double force_z_j = 0.0;
 
       // z_max = 4.0
       // double cutoff_2d = cutsq[itype][jtype] - 16.0;
@@ -265,14 +266,20 @@ void MLOPairLJCut::compute(int eflag, int vflag)
 
         // calculate the derivative for the potential in z \theta_i * d/dz \theta_j
         
-        double force_derivative_factor_z =
+        double force_derivative_factor_z_i =
             sigmoid_alpha * exp(-sigmoid_arg) / pow(1.0 + exp(-sigmoid_arg), 2);
+
+
+        double force_derivative_factor_z_j =
+            sigmoid_alpha * exp(-sigmoid_arg_j) / pow(1.0 + exp(-sigmoid_arg_j), 2);
 
         if (rsq_2d <= LJ_MINIMUM[itype][jtype]) {
           // AH force: return d/dr LJ
           forcelj = r6inv_2d * (lj1[itype][jtype] * r6inv_2d - lj2[itype][jtype]);
 
-          force_z = epsilon[itype][jtype] * theta_j * force_derivative_factor_z;
+          force_z_i = epsilon[itype][jtype] * theta_j * force_derivative_factor_z_i;
+
+          force_z_j = epsilon[itype][jtype] * theta_i * force_derivative_factor_z_j;
 
         }
 
@@ -281,31 +288,37 @@ void MLOPairLJCut::compute(int eflag, int vflag)
           forcelj =
               r6inv_2d * (lj1[itype][jtype] * r6inv_2d - lj2[itype][jtype]) * force_correction;
 
-          force_z = -((lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) * r6inv_2d - offset[itype][jtype]) *
-              theta_j * force_derivative_factor_z;
+          force_z_i = -((lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) * r6inv_2d - offset[itype][jtype]) *
+              theta_j * force_derivative_factor_z_i;
+
+          force_z_j = -((lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) * r6inv_2d - offset[itype][jtype]) *
+              theta_i * force_derivative_factor_z_j;
         }
 
-        if (force_z < 0.0){
-        printf("force in z = %.17e \n", force_z);}
+        if (force_z_i < 0.0){
+        printf("force in z = %.17e \n", force_z_i);}
 
         // Converting units and converting potential to force
         fpair = factor_lj * forcelj * r2inv_2d;
 
-        double fpair_z = factor_lj * force_z;
+        double fpair_z_i = factor_lj * force_z_i;
+        double fpair_z_j = factor_lj * force_z_j;
 
         if (apply_mlo_interactions  == 1){
 
         f[i][0] += delx * fpair;
         f[i][1] += dely * fpair;
-        f[i][2] += fpair_z;
+        f[i][2] += fpair_z_i;
 
-        debug_force_counter_mlo += fpair_z;
+        debug_force_counter_mlo += fpair_z_i;
 
 
         if (newton_pair || j < nlocal) {
+          // x and y are cyclic coordinates --> momentum conservation requires f_j = -f_i
           f[j][0] -= delx * fpair;
           f[j][1] -= dely * fpair;
-          f[j][2] -= fpair_z;
+          // z is not a cyclic coordinate --> no momentum conservation
+          f[j][2] += fpair_z_j;
         }
 
 
@@ -367,7 +380,7 @@ void MLOPairLJCut::compute(int eflag, int vflag)
           // AH force: return d/dr LJ
           forcelj = r6inv_2d * (lj1[itype][jtype] * r6inv_2d - lj2[itype][jtype]);
 
-          force_z = epsilon[itype][jtype] * theta_i * force_derivative_factor_z;
+          force_z_i = epsilon[itype][jtype] * theta_i * force_derivative_factor_z_i;
 
         }
 
@@ -376,8 +389,8 @@ void MLOPairLJCut::compute(int eflag, int vflag)
           forcelj =
               r6inv_2d * (lj1[itype][jtype] * r6inv_2d - lj2[itype][jtype]) * force_correction;
 
-          force_z = -((lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) * r6inv_2d - offset[itype][jtype]) *
-              theta_i * force_derivative_factor_z;
+          force_z_i = -((lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]) * r6inv_2d - offset[itype][jtype]) *
+              theta_i * force_derivative_factor_z_i;
         }
 
 
@@ -401,7 +414,7 @@ void MLOPairLJCut::compute(int eflag, int vflag)
 
            printf("The ah cutoff is at r = %f \n", sqrt(LJ_MINIMUM[itype][jtype]));
            printf("distance between the two in 2D and 3D: %f %f \n", sqrt(rsq_2d), sqrt(rsq));
-           printf("The forces are: x=%f, y=%f, z=%f\n",  delx * fpair, dely * fpair, fpair_z);
+           printf("The forces are: x=%f, y=%f, z=%f\n",  delx * fpair, dely * fpair, fpair_z_i);
           }
           //  printf("     lj3*r6 - lj4  = %f\n", (lj3[itype][jtype] * r6inv_2d - lj4[itype][jtype]));
           //  printf("     r6inv = %.10e \n", r6inv_2d);
@@ -529,6 +542,10 @@ void MLOPairLJCut::coeff(int narg, char **arg)
 
 double MLOPairLJCut::init_one(int i, int j)
 {
+
+
+  printf("-- Version 2026-04-21: Fixed the Momentum Bug. -- \n");
+
   if (setflag[i][j] == 0) {
     epsilon[i][j] = mix_energy(epsilon[i][i], epsilon[j][j], sigma[i][i], sigma[j][j]);
     sigma[i][j] = mix_distance(sigma[i][i], sigma[j][j]);
