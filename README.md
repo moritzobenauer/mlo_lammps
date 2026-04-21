@@ -9,8 +9,11 @@
 
 - (2026/04) $\lambda_{ij}$ is now correctly calculated as $\lambda_{ij} = \Theta_i \Theta_j$
 - (2026/04) self-interactions
+- (2026/04/21) momentum conservation in $z$: $f_z^{i} \neq -f_z^{j}$!
 
 ## Changes
+
+- (2026/04/21) little `printf` statement that ensures the correct version
 
 
 
