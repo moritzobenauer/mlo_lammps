@@ -1,0 +1,159 @@
+# 2D Langevin Dynamics with Energy Minimization
+# z dimension: chemical reactions
+
+# box setup
+# ----------------
+# -              -
+# -              -
+# ----------------
+#
+#   INITIAL_LX = 4 L_y
+
+# --- Setting up variables ---
+
+variable binding_strength   equal  1.7
+# variable delta_t            equal   0.0001 * sqrt(1.0/${binding_strength})
+variable delta_t            equal   0.001 * sqrt(1.0/${binding_strength})
+
+
+variable N          equal   128
+variable rho        equal   0.2
+variable rho_dens   equal   0.9
+
+variable INITIAL_LY equal   sqrt(${N}/${rho}) * sqrt(2) * 0.25
+variable 2INITIAL_LY equal   2 * ${INITIAL_LY}
+variable 3INITIAL_LY equal   3 * ${INITIAL_LY}
+variable 4INITIAL_LY equal   4 * ${INITIAL_LY}
+variable 8INITIAL_LY equal   8 * ${INITIAL_LY}
+
+
+variable SLAB_N      equal   ${N} / ${INITIAL_LY}^2 / ${rho_dens}
+variable SLAB_WIDTH  equal   ${SLAB_N} * ${INITIAL_LY}
+
+
+variable n_dense    equal   floor(${rho_dens}*2*${INITIAL_LY}^2)
+variable n_dilute   equal   floor(${N} - ${n_dense})
+variable h_n_dilute equal   floor(${n_dilute}*0.5)
+
+
+variable z_depth    equal   20.0
+variable cutoff_xy  equal   2.5
+variable z_max      equal   5.0
+variable cutoff     equal   sqrt(${cutoff_xy}^2 + ${z_max}^2)
+
+variable filename   string  test_two_particles
+
+variable temp       equal   1.00
+variable GAMMA      equal   100.0
+
+#
+#   This defines the external free energy landscape for the internal coordinate z
+#
+
+variable b          equal   3.06
+variable s          equal   1.0
+variable f          equal   0.8
+variable z_star     equal   0.0
+
+
+
+# --- Initialization ---
+units           lj
+atom_style      atomic
+dimension       3
+boundary        p p p
+
+newton          on
+
+
+# --- System Definition ---
+region          sim_box block 0 ${8INITIAL_LY} 0 ${INITIAL_LY} -${z_depth} ${z_depth}
+region          spawn_box block 0 ${SLAB_WIDTH} 0 ${INITIAL_LY} 0.75 0.80
+
+create_box      2 sim_box
+
+
+mass            1 1.0
+mass            2 1.0
+
+create_atoms    1 random ${N} 150699 spawn_box
+create_atoms    2 random 64 310873 spawn_box
+
+group           monomers type 1
+group           fuel type 2
+
+# region          spawn_box_active block ${INITIAL_LY} ${3INITIAL_LY} 0 ${INITIAL_LY} 0.75 0.76
+# create_atoms    1 random ${n_dense} 21022 spawn_box_active
+
+# region          spawn_box_dilute_1 block 0 ${INITIAL_LY} 0 ${INITIAL_LY} -2.0 -1.5
+# create_atoms    1 random ${h_n_dilute} 21022 spawn_box_dilute_1
+
+# region          spawn_box_dilute_2 block ${3INITIAL_LY} ${4INITIAL_LY} 0 ${INITIAL_LY} -2.0 -1.5
+# create_atoms    1 random ${h_n_dilute} 21021 spawn_box_dilute_2
+
+
+
+pair_style      lj/cut/mlo ${cutoff} ${z_star} ${cutoff_xy} 
+# pair_style      lj/cut ${cutoff}
+
+pair_coeff      1 1 ${binding_strength} 1.0
+pair_coeff      1 2 0.0 0.75
+pair_coeff      2 2 0.0 0.5
+
+#pair_style hybrid lj/cut/mlo ${cutoff} lj/cut/chemreactions ${cutoff}
+#pair_coeff 1 1 lj/cut/mlo ${binding_strength} 1.0
+#pair_coeff 1 2 lj/cut/mlo 0.0 1.0
+#pair_coeff 2 2 lj/cut/chemreactions ${binding_strength} 1.0
+
+neigh_modify    every 5 delay 0 check yes
+
+
+# --- Minimization ---
+minimize 1.0e-4 1.0e-6 10000 10000
+reset_timestep  0
+
+# # --- NPT ---
+# fix             101 all npt temp ${temp} ${temp} 1.0 iso 0.01 0.01 1.0
+# run             1000
+# unfix           101
+
+# --- Langevin Dynamics Settings ---
+fix             1 all nve
+fix             2 all langevinMLO ${temp} ${temp} 1.0 ${GAMMA} 31081973
+
+#variable phiz atom "v_s * (z^4 - v_b*z^2 + v_fdiff * z)"
+#variable forcez atom "-v_s * (4*z^3 - v_b*2*z + v_fdiff)"
+#fix             3 all addforce 0.0 0.0 v_forcez energy v_phiz
+#compute_modify  thermo_temp dynamic/dof yes
+#fix_modify      3 energy no
+
+fix             3 monomers free_energy ${s} ${b} ${f}
+fix             4 fuel free_energy 1.0 10.0 0.0
+
+
+
+# --- Output ---
+thermo          1000
+thermo_style    custom step temp pe ke epair evdwl f_3 f_4
+# thermo_style    custom step temp pe ke epair evdwl
+
+dump            1 all custom 1000 out/eq_${filename}.lammpstrj id type x y z
+
+# --- Production ---
+# Initialize velocities to kBT = 1
+# velocity        all create ${temp} 150688
+timestep        ${delta_t}
+run             10000000
+# run             10000
+
+write_restart restart_${filename}.equil
+
+# equilibriation done
+
+#undump          1
+#reset_timestep  0
+
+
+#dump            2 all custom 100 out/traj_${filename}.lammpstrj id type x y z
+#run             1000000
+
