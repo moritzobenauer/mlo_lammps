@@ -1,0 +1,25 @@
+units lj
+atom_style atomic
+boundary p p f
+atom_modify map array
+processors * * 1
+region box block -10 10 -10 10 -10 10
+create_box 1 box
+mass 1 1.0
+create_atoms 1 single 0 0 1
+create_atoms 1 single 2.49993 0 1
+pair_style lj/cut/mlo 4.0 0.0 2.5 50.0 zstar fixed theta_check off
+pair_coeff * * 1.0 1.0
+pair_modify shift no
+group left id 1
+group right id 2
+velocity left set -0.5 0 0
+velocity right set 0.5 0 0
+fix integrate all nve
+neighbor 0.3 bin
+neigh_modify every 1 delay 0 check no
+timestep 1.0000000000000001e-05
+thermo_style custom step ke pe etotal
+thermo_modify norm no format float %.17g
+thermo 1
+run 100

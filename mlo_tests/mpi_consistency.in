@@ -1,0 +1,25 @@
+units lj
+atom_style atomic
+boundary p p f
+atom_modify map array
+processors * * 1
+newton ${nt}
+pair_style lj/cut/mlo 5.5901699437 0.0 2.5 alpha 5.0 theta_check off
+read_data mlo_tests/grid.data
+pair_coeff 1 1 1.7 1.00 lambda 1.0
+pair_coeff 2 2 0.9 0.80 lambda 0.0
+pair_coeff 1 2 1.2 0.90 lambda 0.35
+pair_modify shift yes
+group ga type 1
+group gb type 2
+velocity all create 0.6 12345 loop geom
+fix 1 all nve
+fix 3 ga free_energy 1.0 3.06 0.8
+fix 4 gb free_energy 1.0 10.0 0.0
+compute sf all reduce sum fx fy fz
+thermo_modify norm no
+thermo_style custom step evdwl
+run 0 post no
+print "S0 evdwl=$(evdwl:%.17g) sfx=$(c_sf[1]:%.3e) sfy=$(c_sf[2]:%.3e) sfz=$(c_sf[3]:%.13e)"
+run 200
+print "S200 evdwl=$(evdwl:%.17g)"

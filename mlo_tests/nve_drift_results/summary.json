@@ -1,0 +1,74 @@
+[
+  {
+    "case": "many_body_shift_no",
+    "initial_energy": -0.913527342652333,
+    "final_energy": -0.9182576602467218,
+    "delta_energy": -0.0047303175943888,
+    "max_abs_error": 0.005701304092646242,
+    "energy_span": 0.005701304092646242,
+    "samples": 20001
+  },
+  {
+    "case": "many_body_shift_yes",
+    "initial_energy": -0.8953657288057632,
+    "final_energy": -0.895365792183223,
+    "delta_energy": -6.337745983575616e-08,
+    "max_abs_error": 2.3979973484689054e-07,
+    "energy_span": 4.3843809693910885e-07,
+    "samples": 20001
+  },
+  {
+    "case": "crossing_shift_no_dt_1e-04",
+    "initial_energy": 0.23368037863491636,
+    "final_energy": 0.24999804965040012,
+    "delta_energy": 0.01631767101548376,
+    "max_abs_error": 0.01631767101548376,
+    "energy_span": 0.01631767101548376,
+    "samples": 11
+  },
+  {
+    "case": "crossing_shift_yes_dt_1e-04",
+    "initial_energy": 0.24999726977091638,
+    "final_energy": 0.24999804965040012,
+    "delta_energy": 7.798794837421408e-07,
+    "max_abs_error": 7.798794837421408e-07,
+    "energy_span": 7.798794837421408e-07,
+    "samples": 11
+  },
+  {
+    "case": "crossing_shift_no_dt_1e-05",
+    "initial_energy": 0.23368037863491636,
+    "final_energy": 0.2499970747820853,
+    "delta_energy": 0.016316696147168935,
+    "max_abs_error": 0.016316696147168935,
+    "energy_span": 0.016316696147169157,
+    "samples": 101
+  },
+  {
+    "case": "crossing_shift_yes_dt_1e-05",
+    "initial_energy": 0.24999726977091638,
+    "final_energy": 0.2499970747820853,
+    "delta_energy": -1.9498883108148846e-07,
+    "max_abs_error": 1.9498883108148846e-07,
+    "energy_span": 1.9498883108148846e-07,
+    "samples": 101
+  },
+  {
+    "case": "crossing_shift_no_dt_1e-06",
+    "initial_energy": 0.23368037863491636,
+    "final_energy": 0.24999725027873815,
+    "delta_energy": 0.016316871643821784,
+    "max_abs_error": 0.016316871643821784,
+    "energy_span": 0.016316871643821923,
+    "samples": 1001
+  },
+  {
+    "case": "crossing_shift_yes_dt_1e-06",
+    "initial_energy": 0.24999726977091638,
+    "final_energy": 0.24999725027873815,
+    "delta_energy": -1.9492178232605184e-08,
+    "max_abs_error": 1.9492178232605184e-08,
+    "energy_span": 1.9492178232605184e-08,
+    "samples": 1001
+  }
+]

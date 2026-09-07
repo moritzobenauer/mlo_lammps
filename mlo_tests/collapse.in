@@ -1,0 +1,34 @@
+# Two atoms in the xy plane at identical z, so the 3D and in-plane distances coincide and
+# lj/cut/mlo is directly comparable to stock lj/cut.
+units           lj
+atom_style      atomic
+dimension       3
+boundary        p p f
+atom_modify     map array
+processors      * * 1
+
+region          box block -12 12 -12 12 -12 12
+create_box      1 box
+mass            1 1.0
+create_atoms    1 single 0.0 0.0 ${zpos}
+create_atoms    1 single 1.0 0.0 ${zpos}
+
+if "${style} == mlo" then &
+  "pair_style lj/cut/mlo 5.5901699437 0.0 2.5 alpha 50.0" &
+  "pair_coeff * * 1.7 1.0 lambda ${lam}" &
+elif "${style} == wca" &
+  "pair_style lj/cut 1.12246204830937" &
+  "pair_coeff * * 1.7 1.0" &
+else &
+  "pair_style lj/cut 2.5" &
+  "pair_coeff * * 1.7 1.0"
+
+pair_modify     shift yes
+
+variable        r index 0.80 0.90 1.00 1.10 1.12246204 1.12246205 1.20 1.30 1.50 2.00 2.49 2.49999 2.50001 2.60
+label           rloop
+  set           atom 2 x ${r}
+  run           0 post no
+  print         "DATA ${r} $(evdwl:%.17g) $(fx[2]:%.17g) $(fz[1]:%.17g) $(fz[2]:%.17g)"
+next            r
+jump            SELF rloop

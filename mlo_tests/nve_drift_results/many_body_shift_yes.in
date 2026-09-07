@@ -1,0 +1,24 @@
+units lj
+atom_style atomic
+boundary p p f
+atom_modify map array
+processors * * 1
+pair_style lj/cut/mlo 9.34 0.0 2.5 5.0 theta_check off zstar fixed
+read_data "/home/moritz/Projects/playing_with_lammps/current/lammps-stable_22Jul2025/mlo_tests/grid.data"
+pair_coeff 1 1 1.7 1.00
+pair_coeff 2 2 0.9 0.80
+pair_coeff 1 2 1.2 0.90
+pair_modify shift yes
+group ga type 1
+group gb type 2
+velocity all create 0.5 9871 loop geom
+timestep 1.0e-4
+fix 1 all nve
+fix 3 ga free_energy 1.0 3.06 0.8
+fix 4 gb free_energy 1.0 10.0 0.0
+fix_modify 3 energy yes
+fix_modify 4 energy yes
+thermo_style custom step ke pe etotal
+thermo_modify norm yes format float %.17g
+thermo 1
+run 20000
