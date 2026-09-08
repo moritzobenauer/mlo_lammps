@@ -45,10 +45,6 @@ class FixLangevinMLO : public Fix {
   double compute_scalar() override;
   double memory_usage() override;
   void *extract(const char *, int &) override;
-  void grow_arrays(int) override;
-  void copy_arrays(int, int, int) override;
-  int pack_exchange(int, double *) override;
-  int unpack_exchange(int, double *) override;
 
  protected:
   int nvalues, osflag, oflag, tallyflag, zeroflag, tbiasflag;
@@ -68,8 +64,6 @@ class FixLangevinMLO : public Fix {
   int maxatom1, maxatom2;
   double **flangevin;
   double *tforce;
-  double **franprev;
-  double **lv;    //half step velocity
 
   char *id_temp;
   class Compute *temperature;

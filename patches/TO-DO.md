@@ -1,4 +1,4 @@
-1. There is a `patches/patches` directory which is wrong. Everything should be in the parent directory, otherwise the della patching is not working.
+1. CHECK! There is a `patches/patches` directory which is wrong. Everything should be in the parent directory, otherwise the della patching is not working.
 2. Making sure that input scripts do not have periodic z boundary conditions. For a finite phi(z) potential we should never leave the physically reasonable domain anyway. But better safe than sorry.
 3. The claude modified cpp files seem a bit cluttered. I need to clean up.
 4. Local catalysis implementation

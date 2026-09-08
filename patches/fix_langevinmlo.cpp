@@ -56,16 +56,18 @@ static constexpr double EINERTIA = 0.2;    // moment of inertia prefactor for el
 
 FixLangevinMLO::FixLangevinMLO(LAMMPS *lmp, int narg, char **arg) :
     Fix(lmp, narg, arg), gfactor1(nullptr), gfactor2(nullptr), ratio(nullptr),
-    tstr(nullptr), flangevin(nullptr), tforce(nullptr), franprev(nullptr), lv(nullptr),
+    tstr(nullptr), flangevin(nullptr), tforce(nullptr),
     id_temp(nullptr), random(nullptr)
 {
-  if (narg < 7) utils::missing_cmd_args(FLERR, "fix langevin", error);
+  // Expected syntax: fix ID group langevinMLO Tstart Tstop damp aniso seed [tally yes/no]
+  // FIXED by CLAUDE (2026-08-31): the required-argument count was one too low, so a
+  // 7-argument invocation read arg[7] (the seed) past the end of arg.
+  if (narg < 8) utils::missing_cmd_args(FLERR, "fix langevinMLO", error);
 
   dynamic_group_allow = 1;
   scalar_flag = 1;
   global_freq = 1;
   extscalar = 1;
-  ecouple_flag = 1;
   nevery = 1;
 
   if (utils::strmatch(arg[3], "^v_")) {
@@ -83,7 +85,7 @@ FixLangevinMLO::FixLangevinMLO(LAMMPS *lmp, int narg, char **arg) :
   seed = utils::inumeric(FLERR, arg[7], false, lmp);
 
   if (t_period <= 0.0) error->all(FLERR, 5, "Fix langevin period must be > 0.0");
-  if (seed <= 0) error->all(FLERR, 6, "Fix langevin seed value must be > 0");
+  if (seed <= 0) error->all(FLERR, 7, "Fix langevin seed value must be > 0");
 
   // initialize Marsaglia RNG with processor-unique seed
 
@@ -105,7 +107,26 @@ FixLangevinMLO::FixLangevinMLO(LAMMPS *lmp, int narg, char **arg) :
   zeroflag = 0;
   osflag = 0;
 
-  
+  // FIXED by CLAUDE (2026-08-31): `tally` parsing had been dropped along with the other
+  // upstream keywords, leaving tallyflag permanently 0 - END_OF_STEP was never masked and
+  // compute_scalar() always returned 0. Extra arguments were also silently ignored.
+  int iarg = 8;
+  while (iarg < narg) {
+    if (strcmp(arg[iarg], "tally") == 0) {
+      if (iarg + 2 > narg) utils::missing_cmd_args(FLERR, "fix langevinMLO tally", error);
+      tallyflag = utils::logical(FLERR, arg[iarg + 1], false, lmp);
+      iarg += 2;
+    } else {
+      error->all(FLERR,
+                 "Unknown fix langevinMLO keyword: {}. Only `tally yes/no` is supported "
+                 "(the upstream zero/omega/angmom/scale keywords are not implemented here)",
+                 arg[iarg]);
+    }
+  }
+
+  // only advertise reservoir-energy reporting if it is actually being tallied,
+  // otherwise the thermo ecouple/econserve columns would read a silent zero.
+  ecouple_flag = tallyflag;
 
   // set temperature = nullptr, user can override via fix_modify if wants bias
 
@@ -120,8 +141,6 @@ FixLangevinMLO::FixLangevinMLO(LAMMPS *lmp, int narg, char **arg) :
 
   flangevin = nullptr;
   flangevin_allocated = 0;
-  franprev = nullptr;
-  lv = nullptr;
   tforce = nullptr;
   maxatom1 = maxatom2 = 0;
 }
@@ -337,7 +356,8 @@ void FixLangevinMLO::post_force_respa(int vflag, int ilevel, int /*iloop*/)
 template<int Tp_TSTYLEATOM, int Tp_TALLY, int Tp_BIAS, int Tp_RMASS, int Tp_ZERO>
 void FixLangevinMLO::post_force_templated()
 {
-  double gamma1,gamma2, gamma1_z_direction, gamma2_z_direction;
+  // FIXED by CLAUDE (2026-08-31): dropped two unused leftover locals
+  double gamma1,gamma2;
 
   double **v = atom->v;
   double **f = atom->f;
@@ -627,64 +647,17 @@ void *FixLangevinMLO::extract(const char *str, int &dim)
 
 double FixLangevinMLO::memory_usage()
 {
+  // FIXED by CLAUDE (2026-08-31): report only arrays that are really allocated.
   double bytes = 0.0;
-  if (tallyflag || osflag) bytes += (double) atom->nmax * 3 * sizeof(double);
-  if (tforce) bytes += (double) atom->nmax * sizeof(double);
+  if (flangevin) bytes += (double) maxatom1 * 3 * sizeof(double);
+  if (tforce) bytes += (double) maxatom2 * sizeof(double);
   return bytes;
 }
 
 /* ----------------------------------------------------------------------
-   allocate atom-based array for franprev
+   FIXED by CLAUDE (2026-08-31): removed grow_arrays/copy_arrays/pack_exchange/
+   unpack_exchange and the franprev/lv arrays they operated on. Those arrays were
+   never allocated and the fix never registered an atom callback, so none of the
+   methods could ever be called - and the destructor did not free them. Restore them
+   together with the GJF/OS integrator variants if those are wanted later.
 ------------------------------------------------------------------------- */
-
-void FixLangevinMLO::grow_arrays(int nmax)
-{
-  memory->grow(franprev, nmax, 3, "fix_langevin:franprev");
-  memory->grow(lv, nmax, 3, "fix_langevin:lv");
-}
-
-/* ----------------------------------------------------------------------
-   copy values within local atom-based array
-------------------------------------------------------------------------- */
-
-void FixLangevinMLO::copy_arrays(int i, int j, int /*delflag*/)
-{
-  franprev[j][0] = franprev[i][0];
-  franprev[j][1] = franprev[i][1];
-  franprev[j][2] = franprev[i][2];
-  lv[j][0] = lv[i][0];
-  lv[j][1] = lv[i][1];
-  lv[j][2] = lv[i][2];
-}
-
-/* ----------------------------------------------------------------------
-   pack values in local atom-based array for exchange with another proc
-------------------------------------------------------------------------- */
-
-int FixLangevinMLO::pack_exchange(int i, double *buf)
-{
-  int n = 0;
-  buf[n++] = franprev[i][0];
-  buf[n++] = franprev[i][1];
-  buf[n++] = franprev[i][2];
-  buf[n++] = lv[i][0];
-  buf[n++] = lv[i][1];
-  buf[n++] = lv[i][2];
-  return n;
-}
-
-/* ----------------------------------------------------------------------
-   unpack values in local atom-based array from exchange with another proc
-------------------------------------------------------------------------- */
-
-int FixLangevinMLO::unpack_exchange(int nlocal, double *buf)
-{
-  int n = 0;
-  franprev[nlocal][0] = buf[n++];
-  franprev[nlocal][1] = buf[n++];
-  franprev[nlocal][2] = buf[n++];
-  lv[nlocal][0] = buf[n++];
-  lv[nlocal][1] = buf[n++];
-  lv[nlocal][2] = buf[n++];
-  return n;
-}
