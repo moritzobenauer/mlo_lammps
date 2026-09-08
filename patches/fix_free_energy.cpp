@@ -1,3 +1,7 @@
+// MLO @ Princeton University, 2026
+// https://github.com/moritzobenauer/mlo_lammps
+// Developed with Claude Code & Codex.
+
 #include "fix_free_energy.h"
 #include "atom.h"
 #include "update.h"
@@ -60,6 +64,7 @@ void FixFreeEnergy::init()
 void FixFreeEnergy::setup(int vflag) { post_force(vflag); }
 
 void FixFreeEnergy::post_force(int /*vflag*/)
+// The entire logic should sit within post_foce. We add a conservative force coming from an ordinary external potential. 
 {
   double **x = atom->x;
   double **f = atom->f;
@@ -75,13 +80,15 @@ void FixFreeEnergy::post_force(int /*vflag*/)
       double z = x[i][2];
       
       // Force Fz = -dV/dz = -(4*a*z^3 - 2*b*z + f)
-      // Based on your prompt: V = z^4 - b*z^2 + f*z (assuming a=1)
       double f_z = -(4.0 * coeff_a * pow(z, 3) - 2.0 * coeff_b * z + coeff_f);
       f[i][2] += f_z;
 
       // Energy V = a*z^4 - b*z^2 + f*z
       e_total += coeff_a * pow(z, 4) - coeff_b * pow(z, 2) + coeff_f * z;
 
+//	
+// disable_reactions kills all velocity and momentum along z AFTER all other forces have been added to this coordinate.
+//
       if (disable_reactions) {
         v[i][2] = 0.0;
         f[i][2] = 0.0;
